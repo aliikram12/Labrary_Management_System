@@ -1,0 +1,27 @@
+/* ============================================================================
+   PRINT STYLES
+   ============================================================================ */
+@media print {
+    body { background: #fff !important; color: #000 !important; }
+    .app-sidebar, .app-header, .site-footer, .btn, .nav-tabs, form, .dataTables_wrapper .row:first-child, .dataTables_wrapper .row:last-child { display: none !important; }
+    .app-main, .app-content { margin: 0 !important; padding: 0 !important; }
+    .card { border: none !important; box-shadow: none !important; }
+    .card-header { border-bottom: 2px solid #000 !important; padding: 0 0 10px 0 !important; margin-bottom: 20px !important; }
+    .table th { background: transparent !important; border-bottom: 2px solid #000 !important; color: #000 !important; }
+    .table td { border-bottom: 1px solid #ccc !important; }
+    .badge { border: 1px solid #000; color: #000 !important; background: transparent !important; }
+    
+    /* Library Card Print Specifics */
+    .library-card-preview {
+        width: 85mm !important; height: 54mm !important; aspect-ratio: auto !important;
+        margin: 0 auto !important; padding: 15px !important;
+        border: 2px solid #000 !important; border-radius: 8px !important;
+        background: #fff !important; color: #000 !important; box-shadow: none !important;
+        page-break-inside: avoid;
+    }
+    .library-card-preview::before, .library-card-preview::after { display: none !important; }
+    .card-lib-logo i, .card-lib-photo .initial { color: #000 !important; }
+    .card-lib-photo { border-color: #000 !important; }
+    .card-lib-info .card-dept, .card-lib-info .card-number, .card-lib-footer .card-id, .card-lib-footer .card-expiry { color: #333 !important; }
+    * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
+}

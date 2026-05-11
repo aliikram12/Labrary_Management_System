@@ -1,108 +1,78 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
 
-function loginUser($email, $password, $pdo) {
-    if (empty($email) || empty($password)) {
-        return ['success' => false, 'message' => 'Email and password are required'];
-    }
-    
-    $stmt = $pdo->prepare("SELECT * FROM users WHERE (email = ? OR role_number = ?) AND password IS NOT NULL");
-    $stmt->execute([$email, $email]);
+function loginUser($pdo, $email, $password, $role) {
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ? AND role = ?");
+    $stmt->execute([$email, $role]);
     $user = $stmt->fetch();
     
-    if (!$user) {
-        return ['success' => false, 'message' => 'Invalid email/role number or password'];
+    if ($user && password_verify($password, $user['password'])) {
+        // Check if user is suspended
+        if (isset($user['status']) && $user['status'] === 'suspended') {
+            logFailedLogin($pdo, $email, $role, 'Account suspended');
+            return ['success' => false, 'message' => 'Your account has been suspended. Contact admin.'];
+        }
+        
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['name'] = $user['name'];
+        $_SESSION['email'] = $user['email'];
+        $_SESSION['role'] = $user['role'];
+        $_SESSION['role_number'] = $user['role_number'];
+        $_SESSION['csrf_token'] = generateToken();
+        
+        // Update last login
+        $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?")->execute([$user['id']]);
+        
+        // Log action
+        logAction($user['id'], 'User logged in', $pdo, "Role: $role");
+        
+        return ['success' => true, 'role' => $user['role']];
     }
     
-    if (!password_verify($password, $user['password'])) {
-        logFailedLogin($email, $pdo);
-        return ['success' => false, 'message' => 'Invalid email/role number or password'];
-    }
-    
-    $_SESSION['user_id'] = $user['id'];
-    $_SESSION['name'] = $user['name'];
-    $_SESSION['email'] = $user['email'];
-    $_SESSION['role'] = $user['role'];
-    $_SESSION['role_number'] = $user['role_number'];
-    $_SESSION['logged_in'] = true;
-    $_SESSION['login_time'] = time();
-    
-    $updateStmt = $pdo->prepare("UPDATE users SET last_login = NOW() WHERE id = ?");
-    $updateStmt->execute([$user['id']]);
-    
-    logAction($user['id'], 'Login', $pdo);
-    
-    return ['success' => true, 'role' => $user['role'], 'name' => $user['name']];
+    logFailedLogin($pdo, $email, $role);
+    return ['success' => false, 'message' => 'Invalid email or password'];
 }
 
-function registerUser($name, $email, $roleNumber, $department, $password, $pdo) {
-    if (empty($name) || empty($email) || empty($roleNumber) || empty($password)) {
-        return ['success' => false, 'message' => 'All fields are required'];
-    }
-    
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return ['success' => false, 'message' => 'Invalid email format'];
-    }
-    
-    if (strlen($password) < 6) {
-        return ['success' => false, 'message' => 'Password must be at least 6 characters'];
-    }
-    
+function registerUser($pdo, $name, $email, $roleNumber, $department, $password) {
+    // Check if email or role number exists
     $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ? OR role_number = ?");
     $stmt->execute([$email, $roleNumber]);
-    
     if ($stmt->fetch()) {
-        return ['success' => false, 'message' => 'Email or Role Number already exists'];
+        return ['success' => false, 'message' => 'Email or Roll Number already exists'];
     }
     
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-    $insertStmt = $pdo->prepare("INSERT INTO users (name, email, role_number, department, password, role) VALUES (?, ?, ?, ?, ?, 'student')");
+    $cardId = 'LIB-' . date('Y') . '-' . str_pad(rand(1, 99999), 5, '0', STR_PAD_LEFT);
+    $cardExpiry = date('Y-m-d', strtotime('+1 year'));
     
-    if ($insertStmt->execute([$name, $email, $roleNumber, $department, $hashedPassword])) {
-        logAction($pdo->lastInsertId(), 'Registration', $pdo);
-        return ['success' => true];
+    try {
+        $stmt = $pdo->prepare("INSERT INTO users (name, email, role_number, department, password, role, card_id, card_expiry) VALUES (?, ?, ?, ?, ?, 'student', ?, ?)");
+        $stmt->execute([$name, $email, $roleNumber, $department, $hashedPassword, $cardId, $cardExpiry]);
+        
+        $userId = $pdo->lastInsertId();
+        logAction($userId, 'New student registered', $pdo, "Name: $name, Email: $email");
+        
+        // Welcome notification
+        createNotification($pdo, "Welcome to AliStack Digital Library, $name! Your library card has been activated.", 'welcome', 'student', $userId, 'fas fa-gift', 'card.php');
+        
+        return ['success' => true, 'id' => $userId];
+    } catch (Exception $e) {
+        return ['success' => false, 'message' => 'Registration failed. Please try again.'];
     }
-    
-    return ['success' => false, 'message' => 'Registration failed. Please try again'];
 }
 
-function logoutUser($pdo) {
-    $userId = $_SESSION['user_id'] ?? null;
-    
-    if ($userId) {
-        logAction($userId, 'Logout', $pdo);
-    }
-    
-    $_SESSION = array();
-    
-    if (ini_get("session.use_cookies")) {
-        $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000,
-            $params["path"], $params["domain"],
-            $params["secure"], $params["httponly"]
-        );
-    }
-    
+function logoutUser() {
     session_destroy();
-    
-    header('Location: ../index.php');
+    header('Location: login.php');
     exit;
 }
 
-function logAction($userId, $action, $pdo) {
+function logFailedLogin($pdo, $email, $role, $reason = 'Invalid credentials') {
     try {
-        $stmt = $pdo->prepare("INSERT INTO system_logs (user_id, action) VALUES (?, ?)");
-        $stmt->execute([$userId, $action]);
+        $ip = getClientIP();
+        $stmt = $pdo->prepare("INSERT INTO system_logs (user_id, action, ip_address, details) VALUES (NULL, ?, ?, ?)");
+        $stmt->execute(["Failed login attempt for: $email ($role)", $ip, $reason]);
     } catch (Exception $e) {
-        error_log("Failed to log action: " . $e->getMessage());
-    }
-}
-
-function logFailedLogin($email, $pdo) {
-    try {
-        $stmt = $pdo->prepare("INSERT INTO system_logs (user_id, action) VALUES (NULL, ?)");
-        $stmt->execute(['Failed login attempt: ' . $email]);
-    } catch (Exception $e) {
-        error_log("Failed to log failed login: " . $e->getMessage());
+        error_log("Failed login log error: " . $e->getMessage());
     }
 }

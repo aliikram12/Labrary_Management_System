@@ -54,6 +54,7 @@ $userInitial = $currentUser ? getUserInitial($currentUser['name']) : 'U';
     
     <!-- App CSS -->
     <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/print.css" media="print">
     <?php if (strpos($_SERVER['PHP_SELF'], 'admin/') !== false): ?>
     <link rel="stylesheet" href="../assets/css/admin.css">
     <?php endif; ?>

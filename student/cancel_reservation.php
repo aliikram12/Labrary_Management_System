@@ -1,25 +1,14 @@
-<?php
+<?php 
 require_once '../config/database.php';
 require_once '../includes/functions.php';
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
-    header('Location: ../login.php');
-    exit;
+redirectIfNotStudent();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reservation_id'])) {
+    $result = cancelReservation($pdo, (int)$_POST['reservation_id'], $_SESSION['user_id']);
+    $_SESSION['flash_message'] = $result['message'];
+    $_SESSION['flash_type'] = $result['success'] ? 'success' : 'danger';
 }
 
-if (!isset($_GET['id'])) {
-    header('Location: dashboard.php');
-    exit;
-}
-
-$reservationId = (int)$_GET['id'];
-$studentId = $_SESSION['user_id'];
-
-$result = cancelReservation($pdo, $reservationId, $studentId);
-
-if ($result['success']) {
-    header('Location: dashboard.php?message=' . urlencode($result['message']));
-} else {
-    header('Location: dashboard.php?error=' . urlencode($result['message']));
-}
+header('Location: dashboard.php');
 exit;

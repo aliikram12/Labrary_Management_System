@@ -2,206 +2,65 @@
 require_once '../includes/header.php';
 require_once '../config/database.php';
 require_once '../includes/functions.php';
-
 redirectIfNotAdmin();
 
 $stats = getSystemStats($pdo);
 $transactions = getAllTransactions($pdo);
 $books = getAllBooks($pdo);
 $users = getAllUsers($pdo, 'student');
-
-$filterStudent = $_GET['student_id'] ?? '';
-$filterBook = $_GET['book_id'] ?? '';
-
-$reportTransactions = $transactions;
-if ($filterStudent) {
-    $reportTransactions = array_filter($transactions, function($t) use ($filterStudent) {
-        return $t['student_id'] == $filterStudent;
-    });
-}
-if ($filterBook) {
-    $reportTransactions = array_filter($reportTransactions, function($t) use ($filterBook) {
-        return $t['book_id'] == $filterBook;
-    });
-}
+$fines = getAllFines($pdo);
+$monthlyData = getMonthlyChartData($pdo);
+$currency = getSetting($pdo, 'currency_symbol', 'Rs.');
 ?>
 
-<div class="container-fluid px-4 py-4">
-    <h2 class="fw-bold mb-4"><i class="fas fa-chart-bar me-2"></i>Reports & Analytics</h2>
-    
-    <ul class="nav nav-tabs mb-4" role="tablist">
-        <li class="nav-item">
-            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overview">
-                System Overview
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#borrowing">
-                Borrowing History
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#inventory">
-                Inventory Status
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#activity">
-                User Activity
-            </button>
-        </li>
+<div class="container-fluid fade-in">
+    <ul class="nav nav-tabs mb-4" role="tablist" data-aos="fade-up">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#overview">System Overview</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#borrowing">Borrowing History</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#inventory">Inventory</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#finesTab">Fines</button></li>
     </ul>
     
     <div class="tab-content">
+        <!-- Overview Tab -->
         <div class="tab-pane fade show active" id="overview">
-            <div class="row g-4">
-                <div class="col-md-4">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <i class="fas fa-book fa-3x text-primary mb-3"></i>
-                            <h3><?php echo $stats['total_books']; ?></h3>
-                            <p class="mb-0">Total Books</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <i class="fas fa-user-graduate fa-3x text-success mb-3"></i>
-                            <h3><?php echo $stats['total_students']; ?></h3>
-                            <p class="mb-0">Total Students</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <i class="fas fa-book-reader fa-3x text-warning mb-3"></i>
-                            <h3><?php echo $stats['total_issued']; ?></h3>
-                            <p class="mb-0">Currently Issued</p>
-                        </div>
-                    </div>
-                </div>
+            <div class="stats-grid mb-4" data-aos="fade-up">
+                <div class="stat-card"><div class="icon primary"><i class="fas fa-book"></i></div><div class="info"><h3><?php echo $stats['total_books']; ?></h3><p>Books</p></div></div>
+                <div class="stat-card"><div class="icon success"><i class="fas fa-users"></i></div><div class="info"><h3><?php echo $stats['total_students']; ?></h3><p>Students</p></div></div>
+                <div class="stat-card"><div class="icon warning"><i class="fas fa-book-reader"></i></div><div class="info"><h3><?php echo $stats['total_issued']; ?></h3><p>Issued</p></div></div>
+                <div class="stat-card"><div class="icon danger"><i class="fas fa-coins"></i></div><div class="info"><h3><?php echo $currency; ?> <?php echo number_format($stats['pending_fines']); ?></h3><p>Pending Fines</p></div></div>
             </div>
-            
-            <div class="row mt-4">
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Book Availability</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <tr>
-                                        <td>Available Copies</td>
-                                        <td><strong><?php echo $stats['available_books']; ?></strong></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Issued Books</td>
-                                        <td><strong><?php echo $stats['total_issued']; ?></strong></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Pending Reservations</td>
-                                        <td><strong><?php echo $stats['total_reservations']; ?></strong></td>
-                                    </tr>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">User Distribution</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table">
-                                    <tr>
-                                        <td>Students</td>
-                                        <td><strong><?php echo $stats['total_students']; ?></strong></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Librarians</td>
-                                        <td><strong><?php echo $stats['total_librarians']; ?></strong></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Admins</td>
-                                        <td><strong>1</strong></td>
-                                    </tr>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div class="card" data-aos="fade-up" data-aos-delay="100">
+                <div class="card-header"><h5 class="mb-0 fw-bold"><i class="fas fa-chart-bar me-2 text-oxford"></i>Monthly Trends</h5></div>
+                <div class="card-body"><div class="chart-container"><canvas id="reportChart"></canvas></div></div>
             </div>
         </div>
-        
+
+        <!-- Borrowing History -->
         <div class="tab-pane fade" id="borrowing">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Borrowing History Report</h5>
+            <div class="card" data-aos="fade-up">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-history me-2"></i>Borrowing History</h5>
+                    <div class="export-group">
+                        <button class="btn-export btn-export-csv" onclick="exportTable('borrowTable','borrowing_history')"><i class="fas fa-file-csv"></i>CSV</button>
+                        <button class="btn-export btn-export-print" onclick="window.print()"><i class="fas fa-print"></i>Print</button>
+                    </div>
                 </div>
                 <div class="card-body">
-                    <form method="GET" class="row g-3 mb-4">
-                        <div class="col-md-4">
-                            <label class="form-label">Filter by Student</label>
-                            <select class="form-select" name="student_id">
-                                <option value="">All Students</option>
-                                <?php foreach ($users as $user): ?>
-                                    <option value="<?php echo $user['id']; ?>" <?php echo $filterStudent == $user['id'] ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars($user['name']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Filter by Book</label>
-                            <select class="form-select" name="book_id">
-                                <option value="">All Books</option>
-                                <?php foreach ($books as $book): ?>
-                                    <option value="<?php echo $book['id']; ?>" <?php echo $filterBook == $book['id'] ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars($book['title']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-4 d-flex align-items-end">
-                            <button type="submit" class="btn btn-primary w-100">Apply Filter</button>
-                        </div>
-                    </form>
-                    
                     <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Student</th>
-                                    <th>Role Number</th>
-                                    <th>Book</th>
-                                    <th>Issue Date</th>
-                                    <th>Due Date</th>
-                                    <th>Return Date</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
+                        <table class="table data-table" id="borrowTable">
+                            <thead><tr><th>Student</th><th>Roll No</th><th>Book</th><th>Issue</th><th>Due</th><th>Return</th><th>Status</th></tr></thead>
                             <tbody>
-                                <?php foreach ($reportTransactions as $trans): ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($trans['student_name']); ?></td>
-                                        <td><?php echo htmlspecialchars($trans['role_number']); ?></td>
-                                        <td><?php echo htmlspecialchars($trans['title']); ?></td>
-                                        <td><?php echo date('M d, Y', strtotime($trans['issue_date'])); ?></td>
-                                        <td><?php echo date('M d, Y', strtotime($trans['due_date'])); ?></td>
-                                        <td><?php echo $trans['return_date'] ? date('M d, Y', strtotime($trans['return_date'])) : '-'; ?></td>
-                                        <td>
-                                            <span class="badge bg-<?php 
-                                                echo $trans['status'] === 'returned' ? 'success' : ($trans['status'] === 'overdue' ? 'danger' : 'warning'); 
-                                            ?>">
-                                                <?php echo ucfirst($trans['status']); ?>
-                                            </span>
-                                        </td>
-                                    </tr>
+                                <?php foreach ($transactions as $t): ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($t['student_name']); ?></td>
+                                    <td><code><?php echo htmlspecialchars($t['role_number']); ?></code></td>
+                                    <td><?php echo htmlspecialchars($t['title']); ?></td>
+                                    <td><?php echo date('M d, Y', strtotime($t['issue_date'])); ?></td>
+                                    <td><?php echo date('M d, Y', strtotime($t['due_date'])); ?></td>
+                                    <td><?php echo $t['return_date'] ? date('M d, Y', strtotime($t['return_date'])) : '—'; ?></td>
+                                    <td><span class="badge bg-<?php echo $t['status'] === 'returned' ? 'success' : ($t['status'] === 'overdue' ? 'danger' : 'warning'); ?>"><?php echo ucfirst($t['status']); ?></span></td>
+                                </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
@@ -209,41 +68,30 @@ if ($filterBook) {
                 </div>
             </div>
         </div>
-        
+
+        <!-- Inventory -->
         <div class="tab-pane fade" id="inventory">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Inventory Status Report</h5>
+            <div class="card" data-aos="fade-up">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-warehouse me-2"></i>Inventory Status</h5>
+                    <div class="export-group">
+                        <button class="btn-export btn-export-csv" onclick="exportTable('inventoryTable','inventory_report')"><i class="fas fa-file-csv"></i>CSV</button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Title</th>
-                                    <th>Author</th>
-                                    <th>Subject</th>
-                                    <th>Total Copies</th>
-                                    <th>Available</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
+                        <table class="table data-table" id="inventoryTable">
+                            <thead><tr><th>Title</th><th>Author</th><th>Category</th><th>Total</th><th>Available</th><th>Status</th></tr></thead>
                             <tbody>
                                 <?php foreach ($books as $book): ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($book['title']); ?></td>
-                                        <td><?php echo htmlspecialchars($book['author']); ?></td>
-                                        <td><?php echo htmlspecialchars($book['subject']); ?></td>
-                                        <td><?php echo $book['total_copies']; ?></td>
-                                        <td><?php echo $book['available_copies']; ?></td>
-                                        <td>
-                                            <span class="badge bg-<?php 
-                                                echo $book['status'] === 'available' ? 'success' : ($book['status'] === 'reserved' ? 'warning' : 'danger'); 
-                                            ?>">
-                                                <?php echo ucfirst($book['status']); ?>
-                                            </span>
-                                        </td>
-                                    </tr>
+                                <tr>
+                                    <td><strong><?php echo htmlspecialchars($book['title']); ?></strong></td>
+                                    <td><?php echo htmlspecialchars($book['author']); ?></td>
+                                    <td><?php echo htmlspecialchars($book['subject'] ?? 'N/A'); ?></td>
+                                    <td><?php echo $book['total_copies']; ?></td>
+                                    <td><span class="fw-bold text-<?php echo $book['available_copies'] > 0 ? 'success' : 'danger'; ?>"><?php echo $book['available_copies']; ?></span></td>
+                                    <td><span class="badge bg-<?php echo $book['status'] === 'available' ? 'success' : ($book['status'] === 'reserved' ? 'warning' : 'danger'); ?>"><?php echo ucfirst($book['status']); ?></span></td>
+                                </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
@@ -251,47 +99,24 @@ if ($filterBook) {
                 </div>
             </div>
         </div>
-        
-        <div class="tab-pane fade" id="activity">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">User Activity Report</h5>
-                </div>
+
+        <!-- Fines Tab -->
+        <div class="tab-pane fade" id="finesTab">
+            <div class="card" data-aos="fade-up">
+                <div class="card-header"><h5 class="mb-0 fw-bold"><i class="fas fa-coins me-2 text-gold"></i>Fine Report</h5></div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Joined</th>
-                                    <th>Last Login</th>
-                                </tr>
-                            </thead>
+                        <table class="table data-table">
+                            <thead><tr><th>Student</th><th>Book</th><th>Amount</th><th>Date</th><th>Status</th></tr></thead>
                             <tbody>
-                                <?php foreach ($users as $user): 
-                                    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE student_id = ?");
-                                    $stmt->execute([$user['id']]);
-                                    $borrowCount = $stmt->fetchColumn();
-                                    
-                                    $stmt = $pdo->prepare("SELECT COUNT(*) FROM reservations WHERE student_id = ?");
-                                    $stmt->execute([$user['id']]);
-                                    $reserveCount = $stmt->fetchColumn();
-                                ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($user['name']); ?></td>
-                                        <td><?php echo htmlspecialchars($user['email']); ?></td>
-                                        <td>
-                                            <span class="badge bg-<?php 
-                                                echo $user['role'] === 'admin' ? 'dark' : ($user['role'] === 'librarian' ? 'warning' : 'success'); 
-                                            ?>">
-                                                <?php echo ucfirst($user['role']); ?>
-                                            </span>
-                                        </td>
-                                        <td><?php echo date('M d, Y', strtotime($user['created_at'])); ?></td>
-                                        <td><?php echo $user['last_login'] ? date('M d, Y H:i', strtotime($user['last_login'])) : 'Never'; ?></td>
-                                    </tr>
+                                <?php foreach ($fines as $f): ?>
+                                <tr>
+                                    <td><?php echo htmlspecialchars($f['student_name']); ?></td>
+                                    <td><?php echo htmlspecialchars($f['title']); ?></td>
+                                    <td><span class="fine-amount"><?php echo $currency; ?> <?php echo number_format($f['amount'], 2); ?></span></td>
+                                    <td><?php echo date('M d, Y', strtotime($f['fine_date'])); ?></td>
+                                    <td><span class="badge bg-<?php echo $f['status'] === 'paid' ? 'success' : ($f['status'] === 'waived' ? 'secondary' : 'danger'); ?>"><?php echo ucfirst($f['status']); ?></span></td>
+                                </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
@@ -301,5 +126,44 @@ if ($filterBook) {
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('reportChart');
+    if (ctx) {
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: <?php echo json_encode($monthlyData['labels']); ?>,
+                datasets: [{
+                    label: 'Issues', data: <?php echo json_encode($monthlyData['issues']); ?>,
+                    backgroundColor: 'rgba(30,58,95,.8)', borderRadius: 6
+                }, {
+                    label: 'Returns', data: <?php echo json_encode($monthlyData['returns']); ?>,
+                    backgroundColor: 'rgba(196,163,90,.7)', borderRadius: 6
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
+        });
+    }
+});
+
+function exportTable(tableId, filename) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    let csv = [];
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+        let cols = [];
+        row.querySelectorAll('td, th').forEach(col => cols.push('"' + col.innerText.replace(/"/g, '""') + '"'));
+        csv.push(cols.join(','));
+    });
+    const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename + '_' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+}
+</script>
 
 <?php require_once '../includes/footer.php'; ?>
